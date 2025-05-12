@@ -1,0 +1,106 @@
+//Write a program using UDP Sockets to enable file transfer (Script, Text, Audio and Video one
+//file each) between two machines.
+
+L10_client.py
+
+import socket
+
+SERVER_IP = "127.0.0.1"  # Change to the server's IP if needed
+PORT = 8000
+BUFFER_SIZE = 70000
+
+def send_file(sock, file_name, server_address):
+    """Function to send a file to the server."""
+    try:
+        with open(file_name, "rb") as f:
+            file_data = f.read()
+
+        sock.sendto(file_name.encode(), server_address)
+        sock.sendto(file_data, server_address)
+
+        print(f"{file_name} sent successfully.\n")
+
+    except FileNotFoundError:
+        print("File not found. Please check the file name.")
+
+
+def main():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_address = (SERVER_IP, PORT)
+
+    while True:
+        print("Enter choice:\n 1. Text File\n 2. Audio File\n 3. Video File\n 4. Exit")
+        choice = int(input("Enter your choice: "))
+
+        sock.sendto(choice.to_bytes(1, byteorder='big'), server_address)
+
+        if choice in [1, 2, 3]:
+            file_name = input("Enter file name to send: ")
+            send_file(sock, file_name, server_address)
+
+        elif choice == 4:
+            print("Closing client...")
+            sock.close()
+            break
+
+
+if __name__ == "__main__":
+    main()
+
+
+L10_server.py
+
+import socket
+
+BUFFER_SIZE = 70000
+PORT = 8000
+
+
+def receive_file(sock, client_addr, file_name, file_size):
+    """Function to receive a file from the client and save it."""
+    print(f"Receiving {file_name}...")
+
+    data, _ = sock.recvfrom(file_size)
+
+    with open(file_name, "wb") as f:
+        f.write(data)
+
+    print(f"{file_name} received successfully.\n")
+
+
+def main():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("0.0.0.0", PORT))
+
+    print("Server is running and waiting for connections...")
+
+    while True:
+        choice, client_addr = sock.recvfrom(1)
+        choice = int.from_bytes(choice, byteorder='big')
+
+        if choice == 1:  # Text file
+            file_name, _ = sock.recvfrom(1024)
+            file_name = file_name.decode()
+
+            receive_file(sock, client_addr, file_name, BUFFER_SIZE)
+
+        elif choice == 2:  # Audio file
+            file_name, _ = sock.recvfrom(1024)
+            file_name = file_name.decode()
+
+            receive_file(sock, client_addr, file_name, BUFFER_SIZE)
+
+        elif choice == 3:  # Video file
+            file_name, _ = sock.recvfrom(1024)
+            file_name = file_name.decode()
+
+            receive_file(sock, client_addr, file_name, BUFFER_SIZE)
+
+        elif choice == 4:  # Exit
+            print("Closing server...")
+            sock.close()
+            break
+
+
+if __name__ == "__main__":
+    main()

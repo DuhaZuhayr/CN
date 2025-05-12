@@ -1,0 +1,82 @@
+//Write a program using TCP socket for wired network for following:
+//a. Say Hello to Each other                  
+//b. File transfer                       
+//c. Calculator (Arithmetic)
+
+L9_1.py
+
+import socket
+
+def start_server():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("0.0.0.0", 9999))
+    server.listen(5)
+    print("Server started. Listening on port 9999...")
+
+    while True:
+        client_socket, addr = server.accept()
+        print(f"Connection established with {addr}")
+
+        option = client_socket.recv(1024).decode()
+
+        if option == "1":
+            client_socket.send("Hello, Client!".encode())
+
+        elif option == "2":
+            filename = client_socket.recv(1024).decode()
+            try:
+                with open(filename, "rb") as file:
+                    data = file.read()
+                    client_socket.sendall(data)
+            except FileNotFoundError:
+                client_socket.send("File not found".encode())
+
+        elif option == "3":
+            expression = client_socket.recv(1024).decode()
+            try:
+                result = str(eval(expression))
+            except:
+                result = "Error"
+            client_socket.send(result.encode())
+
+        client_socket.close()
+
+if __name__ == "__main__":
+    start_server()
+
+
+L9_2.py
+
+import socket
+
+def client():
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect(("127.0.0.1", 9999))
+
+    print("Choose an option:\n1. Say Hello\n2. File Transfer\n3. Calculator")
+    option = input("Enter option: ")
+    client.send(option.encode())
+
+    if option == "1":
+        print("Server:", client.recv(1024).decode())
+
+    elif option == "2":
+        filename = input("Enter filename to send: ")
+        client.send(filename.encode())
+        data = client.recv(1024)
+        if data.decode() == "File not found":
+            print("File not found on server.")
+        else:
+            with open("received_" + filename, "wb") as file:
+                file.write(data)
+            print("File received successfully.")
+
+    elif option == "3":
+        expression = input("Enter arithmetic expression (e.g., 5+3): ")
+        client.send(expression.encode())
+        print("Result from server:", client.recv(1024).decode())
+
+    client.close()
+
+if __name__ == "__main__":
+    client()

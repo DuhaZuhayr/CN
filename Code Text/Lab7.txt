@@ -1,0 +1,345 @@
+//Implement Socket programming to create Client and Server to send Hello message.
+   ( Implement TCP and UDP Socket)
+
+tcpServer.cpp
+
+#include <iostream>
+#include <string>
+
+#ifdef _WIN32
+    #include <winsock2.h>
+    #pragma comment(lib, "Ws2_32.lib")
+#else
+    #include <unistd.h>
+    #include <arpa/inet.h>
+    #include <sys/socket.h>
+#endif
+
+int main()
+{
+    #ifdef _WIN32
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+        {
+            std::cerr << "WSAStartup failed" << std::endl;
+            return 1;
+        }
+    #endif
+
+    SOCKET server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (server_fd == INVALID_SOCKET)
+    {
+        std::cerr << "Socket creation failed" << std::endl;
+        #ifdef _WIN32
+                WSACleanup();
+        #endif
+        return 1;
+    }
+
+    sockaddr_in server_addr{};
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(65432);
+
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+    {
+        std::cerr << "Bind failed" << std::endl;
+        #ifdef _WIN32
+                closesocket(server_fd);
+                WSACleanup();
+        #endif
+        return 1;
+    }
+
+    if (listen(server_fd, 1) == SOCKET_ERROR)
+    {
+        std::cerr << "Listen failed" << std::endl;
+        #ifdef _WIN32
+                closesocket(server_fd);
+                WSACleanup();
+        #endif
+        return 1;
+    }
+
+    std::cout << "TCP Server listening on port 65432" << std::endl;
+
+    while (true)
+    {
+        sockaddr_in client_addr{};
+        int client_len = sizeof(client_addr);
+        std::cout << "Waiting for client connection..." << std::endl;
+        SOCKET client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+        if (client_fd == INVALID_SOCKET)
+        {
+            std::cerr << "Accept failed" << std::endl;
+            continue;
+        }
+        std::cout << "Client connected!" << std::endl;
+
+        char buffer[1024] = {0};
+        int bytes_received = recv(client_fd, buffer, 1024, 0);
+        if (bytes_received > 0)
+        {
+            std::cout << "Received: " << buffer << std::endl;
+        }
+        else
+        {
+            std::cout << "No data received or connection closed" << std::endl;
+        }
+
+        std::string response = "Hello from TCP Server!";
+        send(client_fd, response.c_str(), response.length(), 0);
+        std::cout << "Response sent to client" << std::endl;
+
+        closesocket(client_fd);
+    }
+
+    #ifdef _WIN32
+        closesocket(server_fd);
+        WSACleanup();
+    #endif
+    return 0;
+}
+
+//g++ tcpClient.cpp -o tcpClient -lws2_32
+//g++ tcpServer.cpp -o tcpServer -lws2_32
+//.\tcpServer
+//.\tcpClient
+
+
+tcpClient.cpp
+
+#include <iostream>
+#include <string>
+
+#ifdef _WIN32
+    #include <winsock2.h>
+    #pragma comment(lib, "Ws2_32.lib")
+#else
+    #include <unistd.h>
+    #include <arpa/inet.h>
+    #include <sys/socket.h>
+#endif
+
+int main() {
+    #ifdef _WIN32
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            std::cerr << "WSAStartup failed" << std::endl;
+            return 1;
+        }
+    #endif
+
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock == INVALID_SOCKET) {
+        std::cerr << "Socket creation failed" << std::endl;
+        #ifdef _WIN32
+            WSACleanup();
+        #endif
+        return 1;
+    }
+
+    sockaddr_in server_addr{};
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(65432);
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    std::cout << "Attempting to connect to server..." << std::endl;
+    if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+        std::cerr << "Connection failed" << std::endl;
+        closesocket(sock);
+        WSACleanup();
+        return 1;
+    }
+    std::cout << "Connected to server!" << std::endl;
+
+    std::string message = "Hello from TCP Client!";
+    send(sock, message.c_str(), message.length(), 0);
+    std::cout << "Message sent to server" << std::endl;
+
+    char buffer[1024] = {0};
+    int bytes_received = recv(sock, buffer, 1024, 0);
+    if (bytes_received > 0) {
+        std::cout << "Server response: " << buffer << std::endl;
+    } else {
+        std::cout << "No response received" << std::endl;
+    }
+
+    closesocket(sock);
+    WSACleanup();
+    return 0;
+}
+
+
+udpServer.cpp
+
+#include <iostream>
+#include <string>
+#include <winsock2.h>
+// #include <ws2tcpip.h>  // Not needed for inet_ntoa
+
+#pragma comment(lib, "Ws2_32.lib")
+
+#define PORT 65433
+
+int main()
+{
+    // Initialize Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+        std::cerr << "WSAStartup failed: " << WSAGetLastError() << std::endl;
+        return 1;
+    }
+
+    // Create UDP socket
+    SOCKET server_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (server_fd == INVALID_SOCKET)
+    {
+        std::cerr << "Socket creation failed: " << WSAGetLastError() << std::endl;
+        WSACleanup();
+        return 1;
+    }
+
+    // Enable address reuse
+    int opt = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt)) == SOCKET_ERROR)
+    {
+        std::cerr << "Setsockopt failed: " << WSAGetLastError() << std::endl;
+        closesocket(server_fd);
+        WSACleanup();
+        return 1;
+    }
+
+    // Set up server address structure
+    sockaddr_in server_addr{};
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind socket
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+    {
+        std::cerr << "Bind failed: " << WSAGetLastError() << std::endl;
+        closesocket(server_fd);
+        WSACleanup();
+        return 1;
+    }
+
+    std::cout << "UDP Server listening on port " << PORT << " (Ctrl+C to exit)" << std::endl;
+
+    while (true)
+    {
+        sockaddr_in client_addr{};
+        int client_len = sizeof(client_addr);
+        char buffer[1024] = {0};
+
+        std::cout << "Waiting for message..." << std::endl;
+        int bytes_received = recvfrom(server_fd, buffer, 1023, 0,
+                                      (struct sockaddr *)&client_addr, &client_len);
+        if (bytes_received == SOCKET_ERROR)
+        {
+            std::cerr << "Receive failed: " << WSAGetLastError() << std::endl;
+            continue;
+        }
+
+        buffer[bytes_received] = '\0'; // Ensure null termination
+        // Use inet_ntoa instead of inet_ntop
+        std::string client_ip = inet_ntoa(client_addr.sin_addr);
+        std::cout << "Received from " << client_ip << ":" << ntohs(client_addr.sin_port)
+                  << ": " << buffer << std::endl;
+
+        // Send response
+        std::string response = "Hello from UDP Server!";
+        if (sendto(server_fd, response.c_str(), response.length(), 0,
+                   (struct sockaddr *)&client_addr, client_len) == SOCKET_ERROR)
+        {
+            std::cerr << "Send failed: " << WSAGetLastError() << std::endl;
+            continue;
+        }
+        std::cout << "Response sent" << std::endl;
+    }
+
+    closesocket(server_fd);
+    WSACleanup();
+    return 0;
+}
+//g++ udpClient.cpp -o udpClient -lws2_32
+//g++ udpServer.cpp -o udpServer -lws2_32
+//.\udpServer
+//.\udpClient
+
+udpClient.cpp
+
+#include <iostream>
+#include <string>
+#include <winsock2.h>
+
+#pragma comment(lib, "Ws2_32.lib")
+
+#define PORT 65433
+
+int main()
+{
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+        std::cerr << "WSAStartup failed: " << WSAGetLastError() << std::endl;
+        return 1;
+    }
+
+    SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock == INVALID_SOCKET)
+    {
+        std::cerr << "Socket creation failed: " << WSAGetLastError() << std::endl;
+        WSACleanup();
+        return 1;
+    }
+
+    sockaddr_in server_addr{};
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    const char *server_ip = "127.0.0.1";
+
+    // Use inet_addr instead of inet_pton
+    server_addr.sin_addr.s_addr = inet_addr(server_ip);
+    if (server_addr.sin_addr.s_addr == INADDR_NONE)
+    {
+        std::cerr << "Invalid address: " << WSAGetLastError() << std::endl;
+        closesocket(sock);
+        WSACleanup();
+        return 1;
+    }
+
+    std::string message = "Hello from UDP Client!";
+    int server_len = sizeof(server_addr);
+    std::cout << "Sending message to " << server_ip << ":" << PORT << "..." << std::endl;
+
+    if (sendto(sock, message.c_str(), message.length(), 0,
+               (struct sockaddr *)&server_addr, server_len) == SOCKET_ERROR)
+    {
+        std::cerr << "Send failed: " << WSAGetLastError() << std::endl;
+        closesocket(sock);
+        WSACleanup();
+        return 1;
+    }
+    std::cout << "Message sent" << std::endl;
+
+    char buffer[1024] = {0};
+    int bytes_received = recvfrom(sock, buffer, 1023, 0,
+                                  (struct sockaddr *)&server_addr, &server_len);
+    if (bytes_received == SOCKET_ERROR)
+    {
+        std::cerr << "Receive failed: " << WSAGetLastError() << std::endl;
+    }
+    else
+    {
+        buffer[bytes_received] = '\0';
+        std::cout << "Server response: " << buffer << std::endl;
+    }
+
+    closesocket(sock);
+    WSACleanup();
+    return 0;
+}
+
